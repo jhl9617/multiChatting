@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.Vector;
 
 public class ClientHendler extends Thread{
+    User user;
 
     public ClientHendler() {
     }

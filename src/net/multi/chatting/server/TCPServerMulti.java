@@ -5,8 +5,12 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
 import java.util.Scanner;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 
-public class TCPServerMulti {
+public class TCPServerMulti implements Runnable{
+    private static Socket clientSocket;
+    static int userCount = 0;
     User[] users = new User[5];
     {
         users[0] = new User("user01","pass01","smileman");
@@ -19,7 +23,9 @@ public class TCPServerMulti {
 
     HashMap<String, User> hashMap = new HashMap<>();
 
-    public TCPServerMulti() {
+    public TCPServerMulti(Socket socket) {
+        TCPServerMulti.clientSocket = socket;
+        ClientHendler.userVector.add(clientSocket); //스레드 추가
     }
 
     public void start() {
@@ -32,76 +38,75 @@ public class TCPServerMulti {
 
         try {
             //2. 서버용 소켓 객체 생성
-            ServerSocket server = new ServerSocket(port);
+
+
             System.out.println("동작하는 서버 포트 : " + port);
-
-            //3. 클라이언트가 연결 요청을 보낼 때 까지 기다림
-            while (true) {
-                System.out.println("서버 대기중..");
-
-                //4.클라이언트로 부터 연결 요청이 오면 수락함
-                //수락할 때 연결 요청한 클라이언트 정보를 저장함
-                Socket client = server.accept();
-                System.out.println("서버와 클라이언트 연결 됨... " + client);
-
-                //5.클라이언트와 서버간의 입출력 스트림 생성함
-                //네트워크 입출력은 바이트 스트림만 가능함
-                InputStream input = client.getInputStream();
-                OutputStream output = client.getOutputStream();
-
-                //사용의 편의를 위해 추가로 보조스트림을 연결할 수도 있음
-                //바이트스트림을 문자스트림으로 변경해서 사용할 수도 있음
-                //또는 버퍼 이용 스트림을 추가할 수도 있음
-                BufferedReader br = new BufferedReader(new InputStreamReader(input));
-                PrintWriter pw = new PrintWriter(output);
-
-
-
-
-                //6.데이터 주고 받음 : 순서가 중요함
-                //클라이언트가 메세지 보내면 >> 서버가 받아서 출력
-                // >> 서버가 답을 보냄 >> 클라이언트가 받아서 출력
-//                String message = br.readLine();
-//                System.out.println(client.getInetAddress().getHostAddress() + " : 보낸 메세지 - " + message);
-                //서버가 답을 보냄
-//                pw.print("서버 : 잘 받았음 ");
-//                pw.flush();
-
-                //반복해서 주고 받기
-                //클라이언트가 "quit"를 보내면 종료됨
-
+            try (ServerSocket server = new ServerSocket(port)) {
                 while (true) {
-                    //읽어서 출력
-                    String message = br.readLine();
+                    System.out.println("서버 대기중..");
 
-                    if(message.equals("quit")) break;
-                    System.out.println(message);
-                    //키보드로 답을 입력받아서 전송함
-                    System.out.print("응답 메세지 : ");
-                    pw.println(scanner.nextLine());
-                    pw.flush();
+                    Socket client = server.accept();
+                    System.out.println("서버와 클라이언트 연결 됨... " + client);
+                    TCPServerMulti tcpserver = new TCPServerMulti(client);
+
 
                 }
 
-
-
-                //7. 스트림 반납, 클라이언트 소켓 닫음(연결 끊기)
-                //나중에 생성된 것 부터 닫는다.
-                pw.close();
-                br.close();
-
-                input.close();
-                output.close();
-
-                client.close();
-
-
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-
         } catch (Exception e) {
             e.printStackTrace();
         }
 
+
+
+
+
+
+//
+//                //6.데이터 주고 받음 : 순서가 중요함
+//                //클라이언트가 메세지 보내면 >> 서버가 받아서 출력
+//                // >> 서버가 답을 보냄 >> 클라이언트가 받아서 출력
+////                String message = br.readLine();
+////                System.out.println(client.getInetAddress().getHostAddress() + " : 보낸 메세지 - " + message);
+//                //서버가 답을 보냄
+////                pw.print("서버 : 잘 받았음 ");
+////                pw.flush();
+//
+//                //반복해서 주고 받기
+//                //클라이언트가 "quit"를 보내면 종료됨
+//
+//                while (true) {
+//                    //읽어서 출력
+//                    String message = br.readLine();
+//
+//                    if(message.equals("quit")) break;
+//                    System.out.println(message);
+//                    //키보드로 답을 입력받아서 전송함
+//                    System.out.print("응답 메세지 : ");
+//                    pw.println(scanner.nextLine());
+//                    pw.flush();
+//
+//                }
+//
+//
+//
+//                //7. 스트림 반납, 클라이언트 소켓 닫음(연결 끊기)
+//                //나중에 생성된 것 부터 닫는다.
+//                pw.close();
+//                br.close();
+//
+//                input.close();
+//                output.close();
+//
+//                client.close();
+//
+//
+//            }
+//
+//        } catch (Exception e) {
+//            e.printStackTrace();
     }
 
     public void loginCheck(String id, String pwd) {
@@ -117,54 +122,33 @@ public class TCPServerMulti {
             }
         }
     }
-    public class User {
 
-        private String userid;
-        private String userpwd;
-        private String nickName;
 
-        public User() {
+    @Override
+    public void run() {
+
+        try (InputStream input = clientSocket.getInputStream();
+             OutputStream output = clientSocket.getOutputStream();
+             BufferedReader br = new BufferedReader(new InputStreamReader(input));
+             PrintWriter pw = new PrintWriter(output);){
+
+            userCount++;
+            System.out.println("클라이언트 : " + userCount + );
+
+
+
+
+            while (true) {
+
+
+
+            }
+        } catch (IOException ex) {
+            throw new RuntimeException(ex);
         }
 
-        public User(String userid, String userpwd, String nickName) {
-            this.userid = userid;
-            this.userpwd = userpwd;
-            this.nickName = nickName;
-        }
 
-        public String getUserid() {
-            return userid;
-        }
 
-        public void setUserid(String userid) {
-            this.userid = userid;
-        }
 
-        public String getUserpwd() {
-            return userpwd;
-        }
-
-        public void setUserpwd(String userpwd) {
-            this.userpwd = userpwd;
-        }
-
-        public String getNickName() {
-            return nickName;
-        }
-
-        public void setNickName(String nickName) {
-            this.nickName = nickName;
-        }
-
-        @Override
-        public String toString() {
-            return "User{" +
-                    "userid='" + userid + '\'' +
-                    ", userpwd='" + userpwd + '\'' +
-                    ", nickName='" + nickName + '\'' +
-                    '}';
-        }
     }
-
-
 }
